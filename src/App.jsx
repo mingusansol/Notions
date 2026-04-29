@@ -36,7 +36,18 @@ function isOverdue(due, status) {
 }
 
 export default function TaskOS() {
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState(() => {
+    try {
+      const saved = localStorage.getItem("taskos-tasks");
+      return saved ? JSON.parse(saved) : initialTasks;
+    } catch {
+      return initialTasks;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("taskos-tasks", JSON.stringify(tasks));
+  }, [tasks]);
   const [selectedProject, setSelectedProject] = useState("전체");
   const [selectedStatus, setSelectedStatus] = useState("전체");
   const [showModal, setShowModal] = useState(false);

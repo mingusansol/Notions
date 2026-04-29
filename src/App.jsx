@@ -149,24 +149,33 @@ function PriorityDist({ tasks }) {
 
 // ── 오늘의 과업 로그 현황 ──
 function TodayLog({ tasks }) {
-  const todayTasks = tasks.filter(t => t.due === TODAY);
-  const logged = todayTasks.filter(t => t.log && t.log.trim());
+  const activeTasks = tasks.filter(t => t.status !== "완료");
+  const completed = tasks.filter(t => t.status === "완료");
+  const logged = tasks.filter(t => t.log && t.log.trim());
+  const total = tasks.length;
+  const pct = total > 0 ? Math.round((completed.length / total) * 100) : 0;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>오늘 기록 완료</span>
-        <span style={{ fontSize: 11, color: "#10b981", fontWeight: 700 }}>{logged.length}/{todayTasks.length}</span>
+        <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>기록 완료</span>
+        <span style={{ fontSize: 11, color: "#10b981", fontWeight: 700 }}>{completed.length}/{total}</span>
+      </div>
+      <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden", marginBottom: 6 }}>
+        <div style={{ height: "100%", width: pct + "%", background: "#10b981", borderRadius: 2, transition: "width 0.5s ease" }} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {todayTasks.slice(0, 5).map(t => (
+        {tasks.slice(0, 5).map(t => (
           <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: t.log?.trim() ? "#10b981" : "#334155", flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: t.log?.trim() ? "#94a3b8" : "#4a5568", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+              background: t.status === "완료" ? "#10b981" : t.log?.trim() ? "#f59e0b" : "#334155" }} />
+            <span style={{ fontSize: 11, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              color: t.status === "완료" ? "#94a3b8" : "#e2e8f0",
+              textDecoration: t.status === "완료" ? "line-through" : "none" }}>
               {t.title}
             </span>
           </div>
         ))}
-        {todayTasks.length === 0 && <span style={{ fontSize: 11, color: "#374151" }}>오늘 마감 태스크 없음</span>}
+        {tasks.length === 0 && <span style={{ fontSize: 11, color: "#374151" }}>태스크 없음</span>}
       </div>
     </div>
   );

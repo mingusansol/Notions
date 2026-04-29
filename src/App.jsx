@@ -311,6 +311,7 @@ export default function TaskOS() {
                   onEdit={() => { setEditTask(task); setShowModal(true); }}
                   onLog={v => updateLog(task.id, v)}
                   onExtend={d => extendTask(task.id, d)}
+                  onComplete={() => { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: "완료" } : t)); }}
                 />
               ))}
           </div>
@@ -347,7 +348,7 @@ export default function TaskOS() {
   );
 }
 
-function TaskRow({ task, index, onCycle, onDelete, onEdit, onLog, onExtend }) {
+function TaskRow({ task, index, onCycle, onDelete, onEdit, onLog, onExtend, onComplete }) {
   const [hovered, setHovered] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const sc = STATUS_CONFIG[task.status];
@@ -400,10 +401,9 @@ function TaskRow({ task, index, onCycle, onDelete, onEdit, onLog, onExtend }) {
 
       {/* 로그 입력 영역 */}
       {logOpen && (
-        <div style={{ padding: "0 16px 14px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-          <div style={{ fontSize: 10, color: "#4a5568", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6, marginTop: 12 }}>
+        <div style={{ padding: "0 16px 16px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <div style={{ fontSize: 10, color: "#4a5568", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8, marginTop: 14 }}>
             오늘 한 일 메모
-            {task.status !== "완료" && <span style={{ marginLeft: 8, color: "#334155", fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>— 저장 후 다음날 자동 완료 처리</span>}
           </div>
           <textarea
             value={task.log || ""}
@@ -412,6 +412,20 @@ function TaskRow({ task, index, onCycle, onDelete, onEdit, onLog, onExtend }) {
             rows={2}
             style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, padding: "10px 12px", color: "#e2e8f0", fontSize: 13, outline: "none", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", lineHeight: 1.5 }}
           />
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button
+              onClick={() => { if (task.log && task.log.trim()) { onComplete(); setLogOpen(false); } }}
+              style={{ flex: 1, padding: "9px", borderRadius: 8, background: task.log?.trim() ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.04)", border: "1px solid " + (task.log?.trim() ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.08)"), color: task.log?.trim() ? "#10b981" : "#374151", cursor: task.log?.trim() ? "pointer" : "default", fontWeight: 700, fontSize: 13 }}
+            >
+              ✓ 기록 완료
+            </button>
+            <button
+              onClick={() => setLogOpen(false)}
+              style={{ padding: "9px 16px", borderRadius: 8, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: "#4a5568", cursor: "pointer", fontWeight: 600, fontSize: 12 }}
+            >
+              닫기
+            </button>
+          </div>
         </div>
       )}
       <style>{`@keyframes fadeSlideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }`}</style>

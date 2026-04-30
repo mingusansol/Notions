@@ -185,52 +185,167 @@ function Dashboard({ tasks }) {
   );
 }
 
-// ── 히스토리 뷰 ──
+// ── 히스토리 캘린더 뷰 ──
 function HistoryView({ history, tasks }) {
-  // 현재 완료된 태스크도 포함 (히스토리에 없는 것만)
   const historyIds = new Set(history.map(h => h.id));
   const currentDone = tasks.filter(t => t.status === "완료" && !historyIds.has(t.id)).map(t => ({ ...t, completedAt: getToday() }));
-  history = [...currentDone, ...history];
-  const grouped = {};
-  history.forEach(t => {
-    const d = t.completedAt || "unknown";
-    if (!grouped[d]) grouped[d] = [];
-    grouped[d].push(t);
-  });
-  const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+  const allHistory = [...currentDone, ...history];
 
-  if (history.length === 0) return (
-    <div style={{ textAlign: "center", padding: "60px 0", color: "#374151", fontSize: 14 }}>
-      아직 완료된 태스크 기록이 없어요
-    </div>
-  );
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+
+  // 날짜별로 태스크 그룹핑
+  const byDate = {};
+  allHistory.forEach(t => {
+    const d = t.completedAt || getToday();
+    if (!byDate[d]) byDate[d] = { done: [], undone: [] };
+    byDate[d].done.push(t);
+  });
+  // 미완료 태스크도 마감일 기준으로
+  tasks.filter(t => t.status !== "완료").forEach(t => {
+    if (!byDate[t.due]) byDate[t.due] = { done: [], undone: [] };
+    byDate[t.due].undone.push(t);
+  });
+
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const monthStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
+
+  const selectedData = selectedDate ? byDate[selectedDate] : null;
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {dates.map(date => (
-        <div key={date}>
-          <div style={{ fontSize: 11, color: "#4a5568", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
-            <span>{date}</span>
-            <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
-            <span style={{ color: "#10b981" }}>{grouped[date].length}개 완료</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {grouped[date].map((t, i) => (
-              <div key={i} style={{ display: "flex", gap: 12, padding: "12px 16px", background: "rgba(16,185,129,0.04)", border: "1px solid rgba(16,185,129,0.1)", borderRadius: 10, alignItems: "flex-start" }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", flexShrink: 0, marginTop: 5 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8", textDecoration: "line-through" }}>{t.title}</span>
-                    <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "rgba(255,255,255,0.06)", color: "#4a5568", fontWeight: 600 }}>{t.project}</span>
-                    {t.recurring && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "rgba(99,102,241,0.1)", color: "#818cf8", fontWeight: 600 }}>🔁 반복</span>}
+    <div style={{ display: "grid", gridTemplateColumns: selectedDate ? "1fr 320px" : "1fr", gap: 20, transition: "all 0.2s" }}>
+      {/* 캘린더 */}
+      <div style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "24px" }}>
+        {/* 월 네비게이션 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+          <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }}
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#94a3b8", cursor: "pointer", padding: "6px 12px", fontSize: 14 }}>‹</button>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em" }}>{calYear}년 {calMonth + 1}월</span>
+          <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); }}
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#94a3b8", cursor: "pointer", padding: "6px 12px", fontSize: 14 }}>›</button>
+        </div>
+
+        {/* 요일 헤더 */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 8 }}>
+          {dayNames.map(d => (
+            <div key={d} style={{ textAlign: "center", fontSize: 10, color: d === "일" ? "#ef4444" : d === "토" ? "#60a5fa" : "#374151", fontWeight: 700, padding: "4px 0", letterSpacing: "0.05em" }}>{d}</div>
+          ))}
+        </div>
+
+        {/* 날짜 그리드 */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+          {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const day = i + 1;
+            const dateStr = `${monthStr}-${String(day).padStart(2, "0")}`;
+            const data = byDate[dateStr];
+            const isToday = dateStr === getToday();
+            const isSelected = selectedDate === dateStr;
+            const hasDone = data?.done?.length > 0;
+            const hasUndone = data?.undone?.length > 0;
+            const isSun = (firstDay + i) % 7 === 0;
+            const isSat = (firstDay + i) % 7 === 6;
+
+            return (
+              <div key={day} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                style={{
+                  position: "relative", aspectRatio: "1", borderRadius: 10, cursor: "pointer",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                  background: isSelected ? "rgba(99,102,241,0.2)" : isToday ? "rgba(99,102,241,0.08)" : hasDone || hasUndone ? "rgba(255,255,255,0.03)" : "transparent",
+                  border: "1px solid",
+                  borderColor: isSelected ? "rgba(99,102,241,0.5)" : isToday ? "rgba(99,102,241,0.2)" : "transparent",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = isToday ? "rgba(99,102,241,0.08)" : hasDone || hasUndone ? "rgba(255,255,255,0.03)" : "transparent"; }}
+              >
+                <span style={{ fontSize: 12, fontWeight: isToday ? 800 : 500, color: isSelected ? "#a5b4fc" : isToday ? "#818cf8" : isSun ? "#ef4444" : isSat ? "#60a5fa" : "#94a3b8" }}>{day}</span>
+                {/* 도트 인디케이터 */}
+                {(hasDone || hasUndone) && (
+                  <div style={{ display: "flex", gap: 2 }}>
+                    {hasDone && <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#10b981" }} />}
+                    {hasUndone && <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#f59e0b" }} />}
                   </div>
-                  {t.log && <div style={{ fontSize: 12, color: "#4a5568", lineHeight: 1.5, fontStyle: "italic" }}>"{t.log}"</div>}
-                </div>
+                )}
               </div>
-            ))}
+            );
+          })}
+        </div>
+
+        {/* 범례 */}
+        <div style={{ display: "flex", gap: 16, marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981" }} />
+            <span style={{ fontSize: 11, color: "#4a5568", fontWeight: 600 }}>완료 업무</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />
+            <span style={{ fontSize: 11, color: "#4a5568", fontWeight: 600 }}>미완료 업무</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(99,102,241,0.2)", border: "1px solid rgba(99,102,241,0.4)" }} />
+            <span style={{ fontSize: 11, color: "#4a5568", fontWeight: 600 }}>오늘</span>
           </div>
         </div>
-      ))}
+      </div>
+
+      {/* 날짜 세부사항 패널 */}
+      {selectedDate && (
+        <div style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "20px", animation: "fadeSlideIn 0.2s ease both", alignSelf: "start" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "#4a5568", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>선택한 날짜</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9" }}>{selectedDate}</div>
+            </div>
+            <button onClick={() => setSelectedDate(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#4a5568", fontSize: 18 }}>✕</button>
+          </div>
+
+          {!selectedData && <div style={{ fontSize: 13, color: "#374151", textAlign: "center", padding: "20px 0" }}>이 날 태스크 없음</div>}
+
+          {selectedData?.done?.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: "#10b981", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} /> 완료 ({selectedData.done.length})
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {selectedData.done.map((t, i) => (
+                  <div key={i} style={{ padding: "10px 12px", background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.12)", borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", textDecoration: "line-through", marginBottom: t.log ? 4 : 0 }}>{t.title}</div>
+                    {t.log && <div style={{ fontSize: 11, color: "#4a5568", fontStyle: "italic", lineHeight: 1.4 }}>"{t.log}"</div>}
+                    <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "rgba(255,255,255,0.06)", color: "#4a5568", fontWeight: 600 }}>{t.project}</span>
+                      {t.recurring && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "rgba(99,102,241,0.1)", color: "#818cf8", fontWeight: 600 }}>🔁 반복</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedData?.undone?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#f59e0b" }} /> 미완료 ({selectedData.undone.length})
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {selectedData.undone.map((t, i) => (
+                  <div key={i} style={{ padding: "10px 12px", background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.12)", borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 }}>{t.title}</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "rgba(255,255,255,0.06)", color: "#4a5568", fontWeight: 600 }}>{t.project}</span>
+                      <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "rgba(255,255,255,0.06)", color: PRIORITY_CONFIG[t.priority]?.color || "#64748b", fontWeight: 600 }}>{t.priority}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      <style>{`@keyframes fadeSlideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }`}</style>
     </div>
   );
 }

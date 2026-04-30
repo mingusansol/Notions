@@ -31,28 +31,30 @@ function processDayRollover(tasks, history, lastDate) {
   if (lastDate === getToday()) return { tasks, history };
   const newHistory = [...history];
   const newTasks = [];
+  const today = getToday();
 
   tasks.forEach(t => {
     if (t.status === "완료" && t.log?.trim()) {
-      // 히스토리에 저장
       newHistory.push({ ...t, completedAt: lastDate });
     } else if (t.status !== "완료" && t.log?.trim()) {
-      // 기록 있으면 완료 처리 후 히스토리
       newHistory.push({ ...t, status: "완료", completedAt: lastDate });
     } else {
-      // 미완료 그대로 유지
       newTasks.push({ ...t, log: "" });
     }
 
-    // 반복 태스크면 새로 생성
+    // 반복 태스크 재생성 — 최종 마감일 체크
     if (t.recurring && t.recurringDays) {
-      newTasks.push({
-        ...t,
-        id: Date.now() + Math.random(),
-        status: "할일",
-        log: "",
-        due: addDays(lastDate, t.recurringDays),
-      });
+      const nextDue = addDays(lastDate, t.recurringDays);
+      const withinDeadline = !t.finalDue || nextDue <= t.finalDue;
+      if (withinDeadline) {
+        newTasks.push({
+          ...t,
+          id: Date.now() + Math.random(),
+          status: "할일",
+          log: "",
+          due: nextDue,
+        });
+      }
     }
   });
 
@@ -414,7 +416,24 @@ export default function TaskOS() {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
     setHistory(prev => [...prev, { ...task, status: "완료", completedAt: getToday() }]);
-    setTasks(prev => prev.map(t => t.id !== id ? t : { ...t, status: "완료" }));
+    setTasks(prev => {
+      const updated = prev.map(t => t.id !== id ? t : { ...t, status: "완료" });
+      // 반복 태스크면 다음 날짜로 새 태스크 생성
+      if (task.recurring && task.recurringDays) {
+        const nextDue = addDays(getToday(), task.recurringDays);
+        const withinDeadline = !task.finalDue || nextDue <= task.finalDue;
+        if (withinDeadline) {
+          return [...updated, {
+            ...task,
+            id: Date.now() + Math.random(),
+            status: "할일",
+            log: "",
+            due: nextDue,
+          }];
+        }
+      }
+      return updated;
+    });
   }
   function extendTask(id, days) {
     setTasks(prev => prev.map(t => t.id !== id ? t : { ...t, due: addDays(t.due, days), status: t.status === "완료" ? "진행중" : t.status }));
@@ -580,7 +599,7 @@ function TaskRow({ task, index, onCycle, onDelete, onEdit, onLog, onExtend, onCo
             <span style={{ fontSize: 14, fontWeight: 500, color: task.status === "완료" ? "#4a5568" : "#e2e8f0", textDecoration: task.status === "완료" ? "line-through" : "none" }}>{task.title}</span>
             <span style={{ fontSize: 10, color: pc.color, fontWeight: 700 }}>{pc.label}</span>
             <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(255,255,255,0.06)", color: "#64748b", fontWeight: 600 }}>{task.project}</span>
-            {task.recurring && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "rgba(99,102,241,0.1)", color: "#818cf8", fontWeight: 600 }}>🔁 {task.recurringDays}일 반복</span>}
+            {task.recurring && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "rgba(99,102,241,0.1)", color: "#818cf8", fontWeight: 600 }}>🔁 {task.recurringDays}일 반복{task.finalDue ? ` · 마감 ${task.finalDue.slice(0,7)}` : ""}</span>}
           </div>
           <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
             {task.tags.map(tag => <span key={tag} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "rgba(255,255,255,0.05)", color: "#64748b", fontWeight: 600 }}>{tag}</span>)}
@@ -680,7 +699,13 @@ function TaskModal({ task, onSave, onClose }) {
   function handle(f, v) { setForm(p => ({ ...p, [f]: v })); }
   function submit() {
     if (!form.title.trim()) return;
-    onSave({ ...form, tags: form.tags.split(",").map(t => t.trim()).filter(Boolean), recurringDays: Number(form.recurringDays) });
+    onSave({ 
+      ...form, 
+      tags: form.tags.split(",").map(t => t.trim()).filter(Boolean), 
+      recurringDays: Number(form.recurringDays),
+      finalDue: form.recurring ? form.due : null,
+      due: form.recurring ? TODAY : form.due,
+    });
   }
   const inp = { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px", color: "#e2e8f0", fontSize: 13, outline: "none", fontFamily: "inherit", boxSizing: "border-box" };
   const lbl = { display: "block", fontSize: 11, color: "#4a5568", marginBottom: 6, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" };
@@ -707,11 +732,17 @@ function TaskModal({ task, onSave, onClose }) {
               <label htmlFor="recurring" style={{ fontSize: 12, color: "#818cf8", fontWeight: 700, cursor: "pointer" }}>🔁 반복 태스크</label>
             </div>
             {form.recurring && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 12, color: "#64748b" }}>완료 후</span>
-                <select value={form.recurringDays} onChange={e => handle("recurringDays", e.target.value)} style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 12 }}>
-                  {[1, 2, 3, 5, 7, 14, 30].map(d => <option key={d} value={d}>{d}일 후 재생성</option>)}
-                </select>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>완료 후</span>
+                  <select value={form.recurringDays} onChange={e => handle("recurringDays", e.target.value)} style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 12 }}>
+                    {[1, 2, 3, 5, 7, 14, 30].map(d => <option key={d} value={d}>{d}일 후 재생성</option>)}
+                  </select>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>마다 반복</span>
+                </div>
+                <div style={{ fontSize: 11, color: "#818cf8", background: "rgba(99,102,241,0.08)", borderRadius: 6, padding: "8px 10px" }}>
+                  📅 위의 <b>마감일</b>({form.due})까지 매 {form.recurringDays}일마다 자동 반복
+                </div>
               </div>
             )}
           </div>

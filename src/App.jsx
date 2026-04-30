@@ -3,6 +3,42 @@ import { useState, useEffect } from "react";
 const TODAY = new Date().toISOString().split("T")[0];
 
 function getToday() { return new Date().toISOString().split("T")[0]; }
+
+// 구글 캘린더 이벤트를 태스크로 변환
+async function fetchCalendarTasks(setTasks) {
+  try {
+    const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?" + new URLSearchParams({
+      timeMin: new Date().toISOString().split("T")[0] + "T00:00:00+09:00",
+      timeMax: new Date().toISOString().split("T")[0] + "T23:59:59+09:00",
+      singleEvents: true,
+      orderBy: "startTime",
+    }), {
+      headers: { Authorization: `Bearer ${window.__gcal_token__}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const calTasks = (data.items || []).map(ev => ({
+      id: "gcal_" + ev.id,
+      title: ev.summary,
+      project: "업무",
+      status: "할일",
+      priority: "높음",
+      due: TODAY,
+      tags: ["📅 캘린더"],
+      log: "",
+      recurring: false,
+      fromCalendar: true,
+      calendarTime: ev.start?.dateTime ? new Date(ev.start.dateTime).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : null,
+    }));
+    if (calTasks.length > 0) {
+      setTasks(prev => {
+        const existingIds = new Set(prev.map(t => t.id));
+        const newOnes = calTasks.filter(t => !existingIds.has(t.id));
+        return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+      });
+    }
+  } catch (e) { console.log("Calendar fetch skipped:", e.message); }
+}
 function addDays(dateStr, n) { const d = new Date(dateStr); d.setDate(d.getDate() + n); return d.toISOString().split("T")[0]; }
 function formatDate(d) {
   const date = new Date(d); const today = new Date(TODAY);
@@ -18,6 +54,7 @@ const initialTasks = [
   { id: 3, title: "비트코인 지갑 백업 확인", project: "개인", status: "할일", priority: "중간", due: TODAY, tags: ["보안"], log: "", recurring: true, recurringDays: 1 },
   { id: 4, title: "HABIT OS 버그 수정", project: "개발", status: "진행중", priority: "중간", due: TODAY, tags: ["React"], log: "", recurring: false },
   { id: 5, title: "건축 CAD 파일 정리", project: "업무", status: "진행중", priority: "높음", due: TODAY, tags: ["CAD"], log: "", recurring: false },
+  { id: "gcal_today1", title: "용산구청 주무관 + 동해종합개발공사 미팅", project: "업무", status: "할일", priority: "높음", due: TODAY, tags: ["📅 캘린더", "미팅"], log: "", recurring: false, fromCalendar: true, calendarTime: "오후 3:00" },
 ];
 
 const PROJECTS = ["전체", "포트폴리오", "업무", "개인", "개발"];
@@ -600,6 +637,7 @@ function TaskRow({ task, index, onCycle, onDelete, onEdit, onLog, onExtend, onCo
             <span style={{ fontSize: 10, color: pc.color, fontWeight: 700 }}>{pc.label}</span>
             <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(255,255,255,0.06)", color: "#64748b", fontWeight: 600 }}>{task.project}</span>
             {task.recurring && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: "rgba(99,102,241,0.1)", color: "#818cf8", fontWeight: 600 }}>🔁 {task.recurringDays}일 반복{task.finalDue ? ` · 마감 ${task.finalDue.slice(0,7)}` : ""}</span>}
+            {task.fromCalendar && task.calendarTime && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(96,165,250,0.12)", color: "#60a5fa", fontWeight: 700 }}>🗓 {task.calendarTime}</span>}
           </div>
           <div style={{ display: "flex", gap: 4, marginTop: 5, flexWrap: "wrap" }}>
             {task.tags.map(tag => <span key={tag} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "rgba(255,255,255,0.05)", color: "#64748b", fontWeight: 600 }}>{tag}</span>)}

@@ -186,7 +186,11 @@ function Dashboard({ tasks }) {
 }
 
 // ── 히스토리 뷰 ──
-function HistoryView({ history }) {
+function HistoryView({ history, tasks }) {
+  // 현재 완료된 태스크도 포함 (히스토리에 없는 것만)
+  const historyIds = new Set(history.map(h => h.id));
+  const currentDone = tasks.filter(t => t.status === "완료" && !historyIds.has(t.id)).map(t => ({ ...t, completedAt: getToday() }));
+  history = [...currentDone, ...history];
   const grouped = {};
   history.forEach(t => {
     const d = t.completedAt || "unknown";
@@ -281,7 +285,14 @@ export default function TaskOS() {
 
   function cycleStatus(id) {
     const order = ["할일", "진행중", "완료"];
-    setTasks(prev => prev.map(t => t.id !== id ? t : { ...t, status: order[(order.indexOf(t.status) + 1) % 3] }));
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const next = order[(order.indexOf(t.status) + 1) % 3];
+      if (next === "완료") {
+        setHistory(h => [...h, { ...t, status: "완료", completedAt: getToday() }]);
+      }
+      return { ...t, status: next };
+    }));
   }
   function updateLog(id, log) { setTasks(prev => prev.map(t => t.id !== id ? t : { ...t, log })); }
   function completeTask(id) {
@@ -377,7 +388,7 @@ export default function TaskOS() {
               <span style={{ fontSize: 11, color: "#374151", fontWeight: 600 }}>총 {history.length}개 완료 기록</span>
               {history.length > 0 && <button onClick={clearHistory} style={{ fontSize: 11, color: "#4a5568", background: "none", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>전체 삭제</button>}
             </div>
-            <HistoryView history={history} />
+            <HistoryView history={history} tasks={tasks} />
           </div>
         )}
 
